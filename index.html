@@ -272,7 +272,28 @@
     .site-footer { margin-top: 40px; border-top: 1px solid var(--border); padding: 18px 20px; }
     .footer-inner { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
     .footer-note { font-size: 10px; color: var(--text-muted); line-height: 1.8; }
-    .footer-meta { font-size: 10px; color: var(--text-muted); text-align: right; }
+
+    /* ── Ranking ── */
+    .ranking-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+    @media (max-width: 600px) { .ranking-grid { grid-template-columns: 1fr; } }
+    .ranking-col { background: var(--surface); }
+    .ranking-col-head {
+      padding: 10px 16px; font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: #FFF; display: flex; align-items: center; gap: 6px;
+    }
+    .ranking-col-head.up   { background: #0057A8; }
+    .ranking-col-head.down { background: #C0001A; }
+    .ranking-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 16px; border-bottom: 1px solid var(--border-light); font-size: 12px;
+    }
+    .ranking-item:last-child { border-bottom: none; }
+    .ranking-rank { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); width: 20px; flex-shrink: 0; }
+    .ranking-date { font-family: var(--font-mono); font-size: 11px; color: var(--text-sub); flex: 1; padding: 0 8px; }
+    .ranking-values { text-align: right; }
+    .ranking-pct  { font-family: var(--font-mono); font-size: 13px; font-weight: 500; display: block; }
+    .ranking-diff { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+    .est-badge { font-size: 9px; color: #92400E; background: #FEF3C7; border: 1px solid #F6D860; padding: 0 3px; margin-left: 3px; }
 
     /* ── Mobile ── */
     @media (max-width: 767px) {
@@ -370,6 +391,7 @@
           <div class="tab-bar">
             <button class="tab-btn active" data-tab="chart">基準価額推移</button>
             <button class="tab-btn" data-tab="heatmap">S&amp;P500 ヒートマップ</button>
+            <button class="tab-btn" data-tab="ranking">騰落率ランキング</button>
           </div>
 
           <div id="tab-chart" class="tab-panel">
@@ -380,6 +402,7 @@
               <button class="period-btn" data-period="3M">3M</button>
               <button class="period-btn" data-period="6M">6M</button>
               <button class="period-btn" data-period="1Y">1Y</button>
+              <button class="period-btn" data-period="YTD">YTD</button>
               <button class="period-btn" data-period="5Y">5Y</button>
               <button class="period-btn active" data-period="ALL">ALL</button>
             </div>
@@ -396,6 +419,10 @@
               <div class="heatmap-loading" id="heatmapLoading">読み込み中...</div>
             </div>
           </div>
+
+          <div id="tab-ranking" class="tab-panel" style="display:none;">
+            <div id="rankingContent" style="padding:20px;">読み込み中...</div>
+          </div>
         </div>
       </div>
 
@@ -406,8 +433,9 @@
         <div>
           <p class="footer-note">基準価格は推定値です。公式基準価格は翌営業日に三菱UFJ アセットマネジメントより発表されます。</p>
           <p class="footer-note">NTR（ネット・トータルリターン）は ^GSPC と参照日の比率から推定しています。</p>
+          <p class="footer-note" style="margin-top:6px;">【データソース】基準価格：三菱UFJアセットマネジメント株式会社 / 為替レート：三菱UFJ銀行 / 株価指数：Yahoo Finance / S&amp;P500 ヒートマップ：TradingView</p>
+          <p class="footer-note" style="margin-top:4px;">【免責事項】本サイトは個人的な学習・記録を目的としており、投資の勧誘・推奨を目的とするものではありません。掲載情報の正確性・完全性は保証しません。投資判断はご自身の責任においてお願いします。</p>
         </div>
-        <div class="footer-meta" id="footerMeta">生成日時：—</div>
       </div>
     </footer>
 
@@ -511,15 +539,26 @@ function selectDate(date) {
   document.getElementById('mobileDateLabel').textContent = dateLabel(date);
   document.getElementById('navSectionHead').textContent = `基準価額（${dateLabel(date)} 推定）`;
   document.getElementById('analysisBody').textContent   = r.analysis || '—';
-  document.getElementById('footerMeta').textContent     = `生成日時：${r.generated_at || '—'}`;
-
   // NAV grid
   const sc       = r.sign_from_prev || 'na';
   const navVal   = r.nav_sp500 != null ? fmtInt(r.nav_sp500) : '計算中';
   const diffVal  = r.diff_from_prev != null ? fmtSignInt(r.diff_from_prev) + ' 円' : '（前日データなし）';
   const diffPct  = r.diff_pct_from_prev != null ? fmtSign(r.diff_pct_from_prev) + ' %' : '';
   const offNav   = r.official_nav ? fmtInt(r.official_nav) + ' 円' : '—';
-  const prevNav  = r.prev_nav     ? fmtInt(r.prev_nav)     + ' 円' : '—';
+
+  // 過去最高値（chart_data全体から計算）
+  let athNav = -1, athDate = null, athEstimated = false;
+  NAV_HISTORY.forEach(d => {
+    if (d.nav != null && d.nav > athNav) {
+      athNav = d.nav; athDate = d.date; athEstimated = !!d.estimated;
+    }
+  });
+  const athVal     = athNav > 0 ? fmtInt(athNav) + ' 円' : '—';
+  const athDateFmt = athDate ? (() => {
+    const dt = new Date(athDate + 'T00:00:00');
+    return `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+  })() : '—';
+  const athEst = athEstimated ? ' <span class="est-tag">推定</span>' : '';
 
   document.getElementById('navGrid').innerHTML = `
     <div class="fund-card">
@@ -555,10 +594,10 @@ function selectDate(date) {
           </span>
         </div>
         <div class="prev-nav-row">
-          <span class="prev-label">前々営業日確定</span>
+          <span class="prev-label">過去最高値</span>
           <span class="prev-value-group">
-            <span class="prev-value">${prevNav}</span>
-            <span class="prev-date">${r.prev_date || '—'}</span>
+            <span class="prev-value">${athVal}${athEst}</span>
+            <span class="prev-date">${athDateFmt}</span>
           </span>
         </div>
       </div>
@@ -607,6 +646,10 @@ function filterByPeriod(data, period) {
   if (period === 'ALL') return data;
   const last = data[data.length - 1];
   if (!last) return data;
+  if (period === 'YTD') {
+    const year = new Date(last.date).getFullYear();
+    return data.filter(d => new Date(d.date) >= new Date(`${year}-01-01`));
+  }
   const start = new Date(last.date);
   start.setDate(start.getDate() - (PERIOD_DAYS[period] || 0));
   return data.filter(d => new Date(d.date) >= start);
@@ -722,6 +765,65 @@ function initHeatmap() {
   container.appendChild(wrap);
 }
 
+// ── Ranking ─────────────────────────────────────────────
+function calcDailyReturns() {
+  const returns = [];
+  for (let i = 1; i < NAV_HISTORY.length; i++) {
+    const prev = NAV_HISTORY[i-1], curr = NAV_HISTORY[i];
+    if (prev.nav == null || curr.nav == null) continue;
+    const diff = curr.nav - prev.nav;
+    const pct  = diff / prev.nav * 100;
+    returns.push({ date: curr.date, nav: curr.nav, diff, pct, estimated: !!curr.estimated });
+  }
+  return returns;
+}
+
+function renderRankingItem(item, rank, isUp) {
+  const sign  = item.pct >= 0 ? '+' : '';
+  const cls   = isUp ? 'positive' : 'negative';
+  const est   = item.estimated ? '<span class="est-badge">推定</span>' : '';
+  const dt    = new Date(item.date + 'T00:00:00');
+  const label = `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
+  return `
+    <div class="ranking-item">
+      <span class="ranking-rank">${rank}</span>
+      <span class="ranking-date">${label}${est}</span>
+      <span class="ranking-values">
+        <span class="ranking-pct ${cls}">${sign}${item.pct.toFixed(2)}%</span>
+        <span class="ranking-diff">${sign}${Math.round(item.diff).toLocaleString()} 円</span>
+      </span>
+    </div>`;
+}
+
+function renderRanking() {
+  const returns = calcDailyReturns();
+  if (returns.length === 0) {
+    document.getElementById('rankingContent').innerHTML =
+      '<p style="color:var(--text-muted);font-size:12px;padding:20px;">データが不足しています。</p>';
+    return;
+  }
+  const sorted = [...returns].sort((a, b) => b.pct - a.pct);
+  const top5   = sorted.slice(0, 5);
+  const bot5   = sorted.slice(-5).reverse();
+  document.getElementById('rankingContent').innerHTML = `
+    <div class="ranking-grid">
+      <div class="ranking-col">
+        <div class="ranking-col-head up">
+          <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,10 7,4 12,10"/></svg>
+          上昇トップ 5
+        </div>
+        ${top5.map((item, i) => renderRankingItem(item, i+1, true)).join('')}
+      </div>
+      <div class="ranking-col">
+        <div class="ranking-col-head down">
+          <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,4 7,10 12,4"/></svg>
+          下落ワースト 5
+        </div>
+        ${bot5.map((item, i) => renderRankingItem(item, i+1, false)).join('')}
+      </div>
+    </div>`;
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -730,6 +832,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
     document.getElementById('tab-' + target).style.display = '';
     if (target === 'heatmap') initHeatmap();
+    if (target === 'ranking') renderRanking();
   });
 });
 
