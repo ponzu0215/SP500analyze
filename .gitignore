@@ -1,0 +1,5 @@
+# 旧形式の個別レポート（pushしない）
+report_*.html
+
+# macOS
+.DS_Store
