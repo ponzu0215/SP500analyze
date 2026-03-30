@@ -214,9 +214,10 @@
     .data-card-row-value { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); text-align: right; }
     .data-card-row-value small { font-size: 10px; color: var(--text-sub); font-family: var(--font-body); margin-left: 2px; }
     .data-card-sub-change { display: block; font-size: 10px; font-family: var(--font-mono); margin-top: 2px; }
-    .data-card-sub-change.positive { color: var(--green); }
-    .data-card-sub-change.negative { color: var(--red); }
-    .data-card-sub-change.na { color: var(--text-muted); }
+    .data-card-sub-change .dc-label { color: var(--text-muted); }
+    .data-card-sub-change .dc-val.positive { color: var(--positive); }
+    .data-card-sub-change .dc-val.negative { color: var(--negative); }
+    .data-card-sub-change .dc-val.na { color: var(--text-muted); }
     .est-tag {
       display: inline-block; font-size: 9px; font-weight: 700; color: #92400E;
       background: #FEF3C7; border: 1px solid #F6D860; padding: 0 4px;
@@ -612,7 +613,7 @@ function selectDate(date) {
       <div class="data-card-row">
         <span class="data-card-row-label">プライスリターン<small>一般的な S&amp;P500 指数（^GSPC）</small></span>
         <span class="data-card-row-value">${fmtNum(r.sp500_price)}
-          <span class="data-card-sub-change ${r.sp500_price_sign||'na'}">前日対比：${r.sp500_price_chg!=null ? fmtSign(r.sp500_price_chg)+' / '+fmtSign(r.sp500_price_pct)+' %' : '—'}</span>
+          <span class="data-card-sub-change"><span class="dc-label">前日対比：</span><span class="dc-val ${r.sp500_price_sign||'na'}">${r.sp500_price_chg!=null ? fmtSign(r.sp500_price_chg)+' / '+fmtSign(r.sp500_price_pct)+' %' : '—'}</span></span>
         </span>
       </div>
       <div class="data-card-row">
@@ -626,7 +627,7 @@ function selectDate(date) {
       <div class="data-card-row">
         <span class="data-card-row-label">仲値（公示仲値）<small>基準価格計算に使用するレート</small></span>
         <span class="data-card-row-value">${fmtNum(r.fx_ttm)} <small>円</small>
-          <span class="data-card-sub-change ${r.fx_ttm_sign||'na'}">前日対比：${r.fx_ttm_chg!=null ? fmtSign(r.fx_ttm_chg)+' / '+fmtSign(r.fx_ttm_pct)+' %' : '—'}</span>
+          <span class="data-card-sub-change"><span class="dc-label">前日対比：</span><span class="dc-val ${r.fx_ttm_sign||'na'}">${r.fx_ttm_chg!=null ? fmtSign(r.fx_ttm_chg)+' / '+fmtSign(r.fx_ttm_pct)+' %' : '—'}</span></span>
         </span>
       </div>
       <div class="data-card-row">
