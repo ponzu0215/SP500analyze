@@ -279,26 +279,32 @@
     .footer-inner { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
     .footer-note { font-size: 10px; color: var(--text-muted); line-height: 1.8; }
 
-    /* ── Ranking ── */
-    .ranking-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
-    @media (max-width: 600px) { .ranking-grid { grid-template-columns: 1fr; } }
-    .ranking-col { background: var(--surface); }
-    .ranking-col-head {
-      padding: 10px 16px; font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
-      text-transform: uppercase; color: #FFF; display: flex; align-items: center; gap: 6px;
+    /* ── Annual Return ── */
+    .annual-return-wrap { padding: 20px 20px 0; }
+    .annual-return-chart-area { position: relative; height: 260px; margin-bottom: 4px; }
+    .annual-return-footer p + p { margin-top: 2px; }
+    .annual-return-cards {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 1px; background: var(--border); border: 1px solid var(--border); margin-top: 20px;
     }
-    .ranking-col-head.up   { background: #0057A8; }
-    .ranking-col-head.down { background: #C0001A; }
-    .ranking-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 16px; border-bottom: 1px solid var(--border-light); font-size: 12px;
+    @media (max-width: 600px) { .annual-return-cards { grid-template-columns: repeat(2, 1fr); } }
+    .annual-return-card { background: var(--surface); padding: 16px 18px 14px; }
+    .annual-return-card-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 8px;
     }
-    .ranking-item:last-child { border-bottom: none; }
-    .ranking-rank { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); width: 20px; flex-shrink: 0; }
-    .ranking-date { font-family: var(--font-mono); font-size: 11px; color: var(--text-sub); flex: 1; padding: 0 8px; }
-    .ranking-values { text-align: right; }
-    .ranking-pct  { font-family: var(--font-mono); font-size: 13px; font-weight: 500; display: block; }
-    .ranking-diff { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+    .annual-return-card-value {
+      font-family: var(--font-mono); font-size: 24px; font-weight: 400;
+      line-height: 1; margin-bottom: 6px; letter-spacing: -0.02em;
+    }
+    .annual-return-card-value.positive { color: var(--positive); }
+    .annual-return-card-value.negative { color: var(--negative); }
+    .annual-return-card-value.na       { color: var(--text-muted); }
+    .annual-return-card-period { font-size: 10px; color: var(--text-sub); font-family: var(--font-mono); margin-bottom: 5px; }
+    .annual-return-card-note  { font-size: 9px; color: var(--text-muted); }
+    .annual-return-footer {
+      padding: 12px 0 20px; font-size: 10px; color: var(--text-muted); line-height: 1.8;
+    }
     .est-badge { font-size: 9px; color: #92400E; background: #FEF3C7; border: 1px solid #F6D860; padding: 0 3px; margin-left: 3px; }
 
     /* ── Mobile ── */
@@ -387,17 +393,17 @@
         </div>
       </div>
 
-      <!-- ③ チャート + ヒートマップ（常に最新） -->
+      <!-- ③ マーケット分析ダッシュボード（常に最新） -->
       <div class="page-section">
         <div class="section-head">
-          基準価額推移・ヒートマップ
+          マーケット分析ダッシュボード
           <span class="latest-badge" id="chartBadge">最新: —</span>
         </div>
         <div class="tab-outer">
           <div class="tab-bar">
-            <button class="tab-btn active" data-tab="chart">基準価額推移</button>
-            <button class="tab-btn" data-tab="heatmap">S&amp;P500 ヒートマップ</button>
-            <button class="tab-btn" data-tab="ranking">騰落率ランキング</button>
+            <button class="tab-btn active" data-tab="chart">チャート</button>
+            <button class="tab-btn" data-tab="heatmap">ヒートマップ</button>
+            <button class="tab-btn" data-tab="ranking">年率リターン</button>
           </div>
 
           <div id="tab-chart" class="tab-panel">
@@ -427,7 +433,18 @@
           </div>
 
           <div id="tab-ranking" class="tab-panel" style="display:none;">
-            <div id="rankingContent" style="padding:20px;">読み込み中...</div>
+            <div id="annualReturnContent">
+              <div class="annual-return-wrap">
+                <div class="annual-return-chart-area">
+                  <canvas id="annualReturnChart"></canvas>
+                </div>
+                <div class="annual-return-cards" id="cagrCards"></div>
+                <div class="annual-return-footer">
+                  <p>※ 2018年は7月3日〜12月31日の半年間データです &nbsp;／&nbsp; 直近N年は前年末基準で集計しています</p>
+                  <p>※ CAGR（年率複利リターン）は各期間の最終営業日のNAVを使用して計算しています。</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -772,63 +789,147 @@ function initHeatmap() {
   container.appendChild(wrap);
 }
 
-// ── Ranking ─────────────────────────────────────────────
-function calcDailyReturns() {
-  const returns = [];
-  for (let i = 1; i < NAV_HISTORY.length; i++) {
-    const prev = NAV_HISTORY[i-1], curr = NAV_HISTORY[i];
-    if (prev.nav == null || curr.nav == null) continue;
-    const diff = curr.nav - prev.nav;
-    const pct  = diff / prev.nav * 100;
-    returns.push({ date: curr.date, nav: curr.nav, diff, pct, estimated: !!curr.estimated });
+// ── Annual Return ────────────────────────────────────────
+let annualReturnChart;
+
+function getYearEndNav(year) {
+  const prefix = `${year}-`;
+  for (let i = NAV_HISTORY.length - 1; i >= 0; i--) {
+    if (NAV_HISTORY[i].date.startsWith(prefix)) return NAV_HISTORY[i];
   }
-  return returns;
+  return null;
 }
 
-function renderRankingItem(item, rank, isUp) {
-  const sign  = item.pct >= 0 ? '+' : '';
-  const cls   = isUp ? 'positive' : 'negative';
-  const est   = item.estimated ? '<span class="est-badge">推定</span>' : '';
-  const dt    = new Date(item.date + 'T00:00:00');
-  const label = `${dt.getFullYear()}/${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getDate()).padStart(2,'0')}`;
-  return `
-    <div class="ranking-item">
-      <span class="ranking-rank">${rank}</span>
-      <span class="ranking-date">${label}${est}</span>
-      <span class="ranking-values">
-        <span class="ranking-pct ${cls}">${sign}${item.pct.toFixed(2)}%</span>
-        <span class="ranking-diff">${sign}${Math.round(item.diff).toLocaleString()} 円</span>
-      </span>
-    </div>`;
+function calcAnnualReturns(currentYear) {
+  const DATA_START_YEAR = 2018;
+  const results = [];
+  for (let y = DATA_START_YEAR; y < currentYear; y++) {
+    const startRec = (y === DATA_START_YEAR) ? NAV_HISTORY[0] : getYearEndNav(y - 1);
+    const endRec   = getYearEndNav(y);
+    if (!startRec || !endRec) continue;
+    results.push({
+      year: y, ret: (endRec.nav / startRec.nav - 1) * 100,
+      partial: y === DATA_START_YEAR, startNav: startRec.nav, endNav: endRec.nav
+    });
+  }
+  const ytdStart = getYearEndNav(currentYear - 1);
+  const ytdEnd   = NAV_HISTORY[NAV_HISTORY.length - 1];
+  if (ytdStart && ytdEnd) {
+    results.push({
+      year: currentYear, ret: (ytdEnd.nav / ytdStart.nav - 1) * 100,
+      partial: false, startNav: ytdStart.nav, endNav: ytdEnd.nav, ytd: true
+    });
+  }
+  return results;
 }
 
-function renderRanking() {
-  const returns = calcDailyReturns();
-  if (returns.length === 0) {
-    document.getElementById('rankingContent').innerHTML =
-      '<p style="color:var(--text-muted);font-size:12px;padding:20px;">データが不足しています。</p>';
-    return;
+function calcCagr(years, endYear, endRec) {
+  const startRec = getYearEndNav(endYear - years);
+  if (!endRec || !startRec) return null;
+  return (Math.pow(endRec.nav / startRec.nav, 1 / years) - 1) * 100;
+}
+
+function renderAnnualReturn() {
+  const currentYear = new Date().getFullYear();
+  const endYear     = currentYear - 1;
+  const annuals     = calcAnnualReturns(currentYear);
+  if (!annuals.length) return;
+
+  const labels   = annuals.map(d => `${d.year}${d.partial ? '*' : d.ytd ? ' YTD' : ''}`);
+  const data     = annuals.map(d => parseFloat(d.ret.toFixed(2)));
+  const bgColors = annuals.map(d => d.ytd ? '#94A3B8' : d.ret >= 0 ? '#0057A8' : '#C0001A');
+
+  const ctx2 = document.getElementById('annualReturnChart').getContext('2d');
+  if (annualReturnChart) {
+    annualReturnChart.data.labels = labels;
+    annualReturnChart.data.datasets[0].data = data;
+    annualReturnChart.data.datasets[0].backgroundColor = bgColors;
+    annualReturnChart.update('none');
+  } else {
+    annualReturnChart = new Chart(ctx2, {
+      type: 'bar',
+      data: { labels, datasets: [{ data, backgroundColor: bgColors, borderRadius: 2, borderSkipped: false }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 24 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(13,31,82,0.95)', titleColor: 'rgba(255,255,255,0.6)',
+            bodyColor: '#FFF', padding: 10, cornerRadius: 2,
+            titleFont: { family: "'DM Mono', monospace", size: 10 },
+            bodyFont:  { family: "'DM Mono', monospace", size: 12 },
+            callbacks: {
+              title: items => {
+                const d = annuals[items[0].dataIndex];
+                return d.ytd ? `${d.year}年（YTD）` : d.partial ? `${d.year}年（7/3〜12/31）` : `${d.year}年`;
+              },
+              label: item => {
+                const d = annuals[item.dataIndex];
+                const sign = d.ret >= 0 ? '+' : '';
+                return [
+                  `  リターン: ${sign}${d.ret.toFixed(2)}%`,
+                  `  期首NAV: ${d.startNav.toLocaleString('ja-JP')} 円`,
+                  `  期末NAV: ${d.endNav.toLocaleString('ja-JP')} 円`,
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false }, border: { color: 'transparent' },
+            ticks: { color: '#9AA3B2', font: { family: "'DM Mono', monospace", size: 11 } }
+          },
+          y: {
+            grid: { display: false }, border: { display: false },
+            ticks: { display: false }
+          }
+        }
+      },
+      plugins: [{
+        id: 'barDataLabels',
+        afterDatasetsDraw(chart) {
+          const { ctx, scales: { y } } = chart;
+          const meta = chart.getDatasetMeta(0);
+          ctx.save();
+          ctx.font = "bold 11px 'DM Mono', monospace";
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          meta.data.forEach((bar, i) => {
+            const value = chart.data.datasets[0].data[i];
+            if (value == null) return;
+            const yPos = value >= 0 ? bar.y : y.getPixelForValue(0);
+            const sign = value >= 0 ? '+' : '';
+            ctx.fillStyle = value >= 0 ? '#0057A8' : '#C0001A';
+            ctx.fillText(`${sign}${value.toFixed(1)}%`, bar.x, yPos - 5);
+          });
+          ctx.restore();
+        }
+      }]
+    });
   }
-  const sorted = [...returns].sort((a, b) => b.pct - a.pct);
-  const top5   = sorted.slice(0, 5);
-  const bot5   = sorted.slice(-5).reverse();
-  document.getElementById('rankingContent').innerHTML = `
-    <div class="ranking-grid">
-      <div class="ranking-col">
-        <div class="ranking-col-head up">
-          <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,10 7,4 12,10"/></svg>
-          上昇トップ 5
-        </div>
-        ${top5.map((item, i) => renderRankingItem(item, i+1, true)).join('')}
-      </div>
-      <div class="ranking-col">
-        <div class="ranking-col-head down">
-          <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,4 7,10 12,4"/></svg>
-          下落ワースト 5
-        </div>
-        ${bot5.map((item, i) => renderRankingItem(item, i+1, false)).join('')}
-      </div>
+
+  const endRec = getYearEndNav(endYear);
+  const cagrDefs = [
+    { label: '直近1年',  years: 1 },
+    { label: '直近3年',  years: 3 },
+    { label: '直近5年',  years: 5 },
+    { label: '直近10年', years: 10 },
+  ];
+  document.getElementById('cagrCards').innerHTML = cagrDefs.map(({ label, years }) => {
+    const cagr    = calcCagr(years, endYear, endRec);
+    const start   = endYear - years + 1;
+    const period  = years === 1 ? `${endYear}年` : `${start}〜${endYear}年`;
+    const valHtml = cagr === null ? '—' : fmtSign(cagr, 1) + '%';
+    const cls     = cagr === null ? 'na' : cagr >= 0 ? 'positive' : 'negative';
+    return `<div class="annual-return-card">
+      <div class="annual-return-card-label">${label}</div>
+      <div class="annual-return-card-value ${cls}">${valHtml}</div>
+      <div class="annual-return-card-period">${period}</div>
+      <div class="annual-return-card-note">年率複利 CAGR</div>
     </div>`;
+  }).join('');
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -839,7 +940,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
     document.getElementById('tab-' + target).style.display = '';
     if (target === 'heatmap') initHeatmap();
-    if (target === 'ranking') renderRanking();
+    if (target === 'ranking') renderAnnualReturn();
   });
 });
 
