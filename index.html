@@ -237,6 +237,7 @@
     .tab-outer { background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
     .tab-bar { display: flex; background: #EEF1F6; border-bottom: 1px solid var(--border); padding: 0 12px; gap: 2px; }
     .tab-btn {
+      flex: 1; text-align: center;
       padding: 11px 20px; font-size: 13px; font-weight: 600; color: var(--text-sub);
       background: transparent; border: 1px solid transparent; border-bottom: none;
       border-radius: 4px 4px 0 0; cursor: pointer; letter-spacing: 0.02em;
@@ -281,6 +282,7 @@
 
     /* ── Annual Return ── */
     .annual-return-wrap { padding: 20px 20px 0; }
+    .annual-return-chart-outer { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .annual-return-chart-area { position: relative; height: 260px; margin-bottom: 4px; }
     .annual-return-footer p + p { margin-top: 2px; }
     .annual-return-cards {
@@ -435,8 +437,10 @@
           <div id="tab-ranking" class="tab-panel" style="display:none;">
             <div id="annualReturnContent">
               <div class="annual-return-wrap">
-                <div class="annual-return-chart-area">
-                  <canvas id="annualReturnChart"></canvas>
+                <div class="annual-return-chart-outer">
+                  <div class="annual-return-chart-area">
+                    <canvas id="annualReturnChart"></canvas>
+                  </div>
                 </div>
                 <div class="annual-return-cards" id="cagrCards"></div>
                 <div class="annual-return-footer">
@@ -838,6 +842,8 @@ function renderAnnualReturn() {
   const labels   = annuals.map(d => `${d.year}${d.partial ? '*' : d.ytd ? ' YTD' : ''}`);
   const data     = annuals.map(d => parseFloat(d.ret.toFixed(2)));
   const bgColors = annuals.map(d => d.ytd ? '#94A3B8' : d.ret >= 0 ? '#0057A8' : '#C0001A');
+
+  document.querySelector('.annual-return-chart-area').style.minWidth = `${annuals.length * 55}px`;
 
   const ctx2 = document.getElementById('annualReturnChart').getContext('2d');
   if (annualReturnChart) {
