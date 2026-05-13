@@ -251,10 +251,11 @@
     .chart-toolbar { padding: 10px 16px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
     .chart-toolbar-label { font-size: 10px; color: var(--text-muted); margin-right: 4px; letter-spacing: 0.06em; text-transform: uppercase; }
     .period-btn {
-      font-family: var(--font-body); font-size: 11px; font-weight: 500;
-      padding: 4px 7px; border: 1px solid var(--border); line-height: 1.4;
+      font-family: var(--font-body); font-size: 10px; font-weight: 500;
+      width: 30px; padding: 4px 0; border: 1px solid var(--border); line-height: 1.4;
+      text-align: center; white-space: nowrap; overflow: hidden;
       background: var(--surface); color: var(--text-sub); cursor: pointer;
-      transition: background 0.1s, color 0.1s, border-color 0.1s; letter-spacing: 0.04em;
+      transition: background 0.1s, color 0.1s, border-color 0.1s;
     }
     .period-btn:hover { background: #EEF0F6; border-color: #B0B8CB; }
     .period-btn.active { background: var(--navy); color: #FFF; border-color: var(--navy); }
