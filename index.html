@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="apple-touch-icon" href="icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0D1F52">
   <title>eMAXIS Slim 日次モニター</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -72,9 +74,17 @@
     }
     .date-groups { padding: 6px 0 16px; }
     .date-group-label {
-      padding: 10px 16px 4px;
+      width: 100%; padding: 10px 16px 4px;
       font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.08em;
+      font-family: var(--font-body); background: none; border: none; cursor: pointer;
+      text-align: left; display: flex; align-items: center; justify-content: space-between; gap: 6px;
     }
+    .date-group-label:hover { color: var(--navy); }
+    .date-group-meta { display: flex; align-items: center; gap: 5px; }
+    .date-group-count { font-weight: 400; font-family: var(--font-mono); }
+    .date-group-chevron { font-size: 8px; transition: transform 0.15s; }
+    .date-group.collapsed .date-group-chevron { transform: rotate(-90deg); }
+    .date-group.collapsed .date-group-items { display: none; }
     .date-item {
       display: block; width: 100%;
       padding: 7px 16px 6px;
@@ -224,6 +234,11 @@
       background: #FEF3C7; border: 1px solid #F6D860; padding: 0 4px;
       margin-left: 4px; vertical-align: middle;
     }
+    .ath-badge {
+      display: inline-block; font-size: 10px; font-weight: 700; color: #92400E;
+      background: #FEF3C7; border: 1px solid #F6D860; border-radius: 9px;
+      padding: 1px 8px; margin-left: 6px; letter-spacing: 0.03em; vertical-align: middle;
+    }
 
     /* ── Analysis ── */
     .analysis-outer { background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
@@ -318,6 +333,14 @@
       .nav-figure { font-size: 28px; }
       .tab-btn { padding: 10px 14px; font-size: 12px; }
       .header-sub { display: none; }
+    }
+
+    /* ── Reduced motion（視覚過敏への配慮） ── */
+    @media (prefers-reduced-motion: reduce) {
+      .nav-illustration svg, .nav-illustration svg * {
+        animation: none !important; transition: none !important;
+      }
+      .date-group-chevron, .drawer, .drawer-overlay { transition: none !important; }
     }
   </style>
 </head>
@@ -521,6 +544,13 @@ function usFlagSvg() {
 let allDates    = [];
 let currentDate = null;
 
+function navFor(d) {
+  const r = APP_DATA.records[d];
+  if (r && r.nav_sp500 != null) return r.nav_sp500;
+  const idx = APP_DATA.archive_index || {};
+  return idx[d] != null ? idx[d] : null;
+}
+
 function buildDateList(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
@@ -529,21 +559,29 @@ function buildDateList(containerId) {
     const key = monthGroup(d);
     (groups[key] = groups[key] || []).push(d);
   });
+  const currentMonth = currentDate ? monthGroup(currentDate) : null;
   el.innerHTML = Object.entries(groups).map(([month, dates]) => `
-    <div class="date-group">
-      <div class="date-group-label">${month}</div>
+    <div class="date-group${month === currentMonth ? '' : ' collapsed'}">
+      <button class="date-group-label" type="button">
+        <span>${month}</span>
+        <span class="date-group-meta"><span class="date-group-count">${dates.length}件</span><span class="date-group-chevron">▼</span></span>
+      </button>
+      <div class="date-group-items">
       ${dates.map(d => {
-        const r = APP_DATA.records[d];
-        const nav = r.nav_sp500 != null ? fmtInt(r.nav_sp500) + '円' : '—';
+        const nav = navFor(d);
         return `<button class="date-item${d===currentDate?' active':''}" data-date="${d}">
           ${dateLabel(d)}
-          <span class="date-item-sub">${nav}</span>
+          <span class="date-item-sub">${nav != null ? fmtInt(nav) + '円' : '—'}</span>
         </button>`;
       }).join('')}
+      </div>
     </div>
   `).join('');
   el.querySelectorAll('.date-item').forEach(btn =>
     btn.addEventListener('click', () => { selectDate(btn.dataset.date); closeDrawer(); })
+  );
+  el.querySelectorAll('.date-group-label').forEach(btn =>
+    btn.addEventListener('click', () => btn.closest('.date-group').classList.toggle('collapsed'))
   );
 }
 
@@ -553,9 +591,25 @@ function refreshActiveItems() {
   );
 }
 
+// ── Archive lazy load ───────────────────────────────────
+let archivePromise = null;
+function loadArchive() {
+  if (!archivePromise) {
+    archivePromise = fetch('./archive.json', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(a => { APP_DATA.records = Object.assign({}, a.records, APP_DATA.records); })
+      .catch(e => { archivePromise = null; throw e; });
+  }
+  return archivePromise;
+}
+
 // ── Render Selected Date ────────────────────────────────
-function selectDate(date) {
+async function selectDate(date) {
   currentDate = date;
+  if (!APP_DATA.records[date] && (APP_DATA.archive_index || {})[date] !== undefined) {
+    try { await loadArchive(); }
+    catch (e) { console.error('archive.json 読み込みエラー:', e); return; }
+  }
   const r = APP_DATA.records[date];
   if (!r) return;
 
@@ -584,6 +638,14 @@ function selectDate(date) {
   const athDateFmt = athDate || '—';
   const athEst = athEstimated ? ' <span class="est-tag">推定</span>' : '';
 
+  // この日時点で最高値を更新していたか（選択日より前の最大NAVと比較）
+  let prevMax = -1;
+  NAV_HISTORY.forEach(d => {
+    if (d.date < date && d.nav != null && d.nav > prevMax) prevMax = d.nav;
+  });
+  const isNewAth = r.nav_sp500 != null && prevMax > 0 && r.nav_sp500 > prevMax;
+  const athBadge = isNewAth ? ' <span class="ath-badge">&#127881; 最高値更新</span>' : '';
+
   document.getElementById('navGrid').innerHTML = `
     <div class="fund-card">
       <div class="fund-card-head">
@@ -595,7 +657,7 @@ function selectDate(date) {
       </div>
       <div class="nav-body">
         <div class="nav-main">
-          <div class="nav-as-of">${r.date_jp || r.date} 推定</div>
+          <div class="nav-as-of">${r.date_jp || r.date} 推定${athBadge}</div>
           <div class="nav-value-row">
             <span class="nav-figure">${navVal}</span>
             <span class="nav-unit">円</span>
@@ -705,6 +767,32 @@ function buildChartData(filtered) {
 
 let filteredCache = NAV_HISTORY, chart;
 
+// 過去最高値の水平点線をチャートに描画するプラグイン
+const athLinePlugin = {
+  id: 'athLine',
+  afterDatasetsDraw(c) {
+    let ath = -1;
+    NAV_HISTORY.forEach(d => { if (d.nav != null && d.nav > ath) ath = d.nav; });
+    if (ath <= 0) return;
+    const { ctx: g, chartArea, scales: { y } } = c;
+    const yPos = y.getPixelForValue(ath);
+    if (yPos < chartArea.top - 1 || yPos > chartArea.bottom) return;
+    g.save();
+    g.strokeStyle = 'rgba(217,119,6,0.55)';
+    g.lineWidth = 1;
+    g.setLineDash([4, 4]);
+    g.beginPath(); g.moveTo(chartArea.left, yPos); g.lineTo(chartArea.right, yPos); g.stroke();
+    g.setLineDash([]);
+    g.font = "10px 'DM Mono', monospace";
+    g.fillStyle = '#B45309';
+    g.textAlign = 'left';
+    const drawAbove = yPos - chartArea.top > 14;
+    g.textBaseline = drawAbove ? 'bottom' : 'top';
+    g.fillText(`過去最高値 ${ath.toLocaleString()}円`, chartArea.left + 6, drawAbove ? yPos - 3 : yPos + 3);
+    g.restore();
+  }
+};
+
 function renderChart(period) {
   filteredCache = filterByPeriod(NAV_HISTORY, period);
   const { labels, navs, pointColors, pointRadius, pointHoverRadius } = buildChartData(filteredCache);
@@ -747,7 +835,8 @@ function renderChart(period) {
         y: { position: 'right', grid: { color: 'rgba(205,210,220,0.4)', drawTicks: false }, border: { color: 'transparent' },
              ticks: { color: '#9AA3B2', font: { family: "'DM Mono', monospace", size: 10 }, callback: v => v.toLocaleString() } }
       }
-    }
+    },
+    plugins: [athLinePlugin]
   });
 }
 
@@ -968,15 +1057,16 @@ overlay.addEventListener('click', closeDrawer);
 // ── Initialize ──────────────────────────────────────────
 async function init() {
   try {
-    const res = await fetch('./data.json');
+    const res = await fetch('./data.json', { cache: 'no-store' });
     APP_DATA    = await res.json();
+    APP_DATA.archive_index = APP_DATA.archive_index || {};
     NAV_HISTORY = APP_DATA.chart_data;
-    allDates    = Object.keys(APP_DATA.records).sort().reverse();
+    allDates    = [...new Set([...Object.keys(APP_DATA.records), ...Object.keys(APP_DATA.archive_index)])].sort().reverse();
     currentDate = APP_DATA.latest || allDates[0];
 
     buildDateList('sidebarList');
     buildDateList('drawerList');
-    selectDate(currentDate);
+    await selectDate(currentDate);
     document.getElementById('chartBadge').textContent = '最新: ' + (APP_DATA.latest || '—');
     renderChart('ALL');
     updatePeriodReturn(filteredCache);
